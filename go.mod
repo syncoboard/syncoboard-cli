@@ -1,4 +1,4 @@
-module syncoboard-tui
+module syncoboard
 
 go 1.24.3
 

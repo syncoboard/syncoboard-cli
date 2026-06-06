@@ -1,10 +1,21 @@
-# syncoboard-tui
+# syncoboard
 
-`syncoboard-tui` is a Terminal User Interface (TUI) application designed to interact with the [Syncoboard API](https://github.com/syncoboard/syncoboard).
+`syncoboard` is a Terminal User Interface (TUI) application designed to interact with the [Syncoboard API](https://github.com/syncoboard/syncoboard).
 
 ## Prerequisites
 
 - Go 1.24 or later
+
+## Install
+
+To install the tool using Go:
+```bash
+go install github.com/syncoboard/syncoboard-cli@latest
+```
+After installation, you can run the tool by simply typing:
+```bash
+syncoboard
+```
 
 ## Building and Running
 
@@ -15,8 +26,8 @@ go run main.go
 
 To build the executable:
 ```bash
-go build -o syncoboard-tui .
-./syncoboard-tui
+go build -o syncoboard .
+./syncoboard
 ```
 
 ## Features

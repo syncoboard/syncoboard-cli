@@ -58,18 +58,26 @@ func (m Model) Init() tea.Cmd {
 }
 
 var (
+	// Visual Identity Colors
+	obsidianNight = lipgloss.Color("#0B0E14") // Background (optional)
+	voidGrey      = lipgloss.Color("#161B22") // Surface
+	neonPulse     = lipgloss.Color("#00F5FF") // Accent
+	gitGreen      = lipgloss.Color("#2EA043") // Status
+	syntaxGrey    = lipgloss.Color("#8B949E") // Typography
+
 	panelStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
+			BorderForeground(voidGrey).
+			Background(voidGrey).
 			Padding(0, 1)
 
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("86")).
+			Foreground(neonPulse).
 			Underline(true)
 
-	promptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	pathStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	promptStyle = lipgloss.NewStyle().Foreground(neonPulse)
+	pathStyle   = lipgloss.NewStyle().Foreground(syntaxGrey)
 )
 
 func (m Model) View() string {
@@ -80,30 +88,46 @@ func (m Model) View() string {
 	// Calculate panel widths
 	panelWidth := (m.width - 6) / 3
 
+	// Max lines for content to fit exactly in Height(10) panel.
+	// Lipgloss includes borders in height (2 lines). 1 line for title. Leaving 7 lines.
+	maxContentLines := 7
+
 	// Left: Workspaces
 	wsContent := titleStyle.Render("Workspaces") + "\n"
 	if len(m.workspaces) == 0 {
-		wsContent += lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("No workspaces loaded.\nRun /cd to navigate.")
+		wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No workspaces loaded.\nRun /cd to navigate.")
 	} else {
-		wsContent += strings.Join(m.workspaces, "\n")
+		displayWorkspaces := m.workspaces
+		if len(displayWorkspaces) > maxContentLines {
+			displayWorkspaces = displayWorkspaces[:maxContentLines]
+		}
+		wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayWorkspaces, "\n"))
 	}
 	wsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(wsContent)
 
 	// Middle: Tasks
 	taskContent := titleStyle.Render("Tasks") + "\n"
 	if len(m.tasks) == 0 {
-		taskContent += lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("No tasks loaded.")
+		taskContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No tasks loaded.")
 	} else {
-		taskContent += strings.Join(m.tasks, "\n")
+		displayTasks := m.tasks
+		if len(displayTasks) > maxContentLines {
+			displayTasks = displayTasks[:maxContentLines]
+		}
+		taskContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayTasks, "\n"))
 	}
 	taskPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(taskContent)
 
 	// Right: Task Details
 	detailsContent := titleStyle.Render("Task Details") + "\n"
 	if m.taskDetails == "" {
-		detailsContent += lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("Select a task to view details.")
+		detailsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("Select a task to view details.")
 	} else {
-		detailsContent += m.taskDetails
+		lines := strings.Split(m.taskDetails, "\n")
+		if len(lines) > maxContentLines {
+			lines = lines[:maxContentLines]
+		}
+		detailsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(lines, "\n"))
 	}
 	detailsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(detailsContent)
 

@@ -34,10 +34,14 @@ type Model struct {
 
 func InitialModel() Model {
 	ti := textinput.New()
+	ti.Prompt = "" // Remove default textinput prompt as we render a custom one
 	ti.Placeholder = "Enter command..."
 	ti.Focus()
 	ti.CharLimit = 256
 	ti.Width = 50
+	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
+	ti.Cursor.Style = lipgloss.NewStyle().Foreground(neonPulse)
+	ti.TextStyle = lipgloss.NewStyle().Foreground(syntaxGrey)
 
 	return Model{
 		virtualPath:    "/",
@@ -136,16 +140,26 @@ func (m Model) View() string {
 	// Output area
 	outputBox := panelStyle.Copy().
 		Width(m.width - 2).
-		Height(m.viewport.Height + 2).
+		Height(m.viewport.Height).
 		Render(m.viewport.View())
 
 	// Input area
 	prompt := pathStyle.Render(m.virtualPath+" ") + promptStyle.Render("$ ")
-	inputLine := prompt + m.textInput.View()
+	inputLine := lipgloss.NewStyle().Padding(0, 1).Render(prompt + m.textInput.View())
 
-	return lipgloss.JoinVertical(lipgloss.Left,
+	appStyle := lipgloss.NewStyle().
+		Foreground(syntaxGrey).
+		Background(obsidianNight)
+
+	viewContent := lipgloss.JoinVertical(lipgloss.Left,
 		topSection,
 		outputBox,
 		inputLine,
+	)
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top,
+		appStyle.Render(viewContent),
+		lipgloss.WithWhitespaceBackground(obsidianNight),
+		lipgloss.WithWhitespaceChars(" "),
 	)
 }

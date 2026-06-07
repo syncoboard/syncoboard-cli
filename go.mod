@@ -1,4 +1,4 @@
-module syncoboard
+module syncoboard-cli
 
 go 1.24.3
 

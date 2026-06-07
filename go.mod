@@ -6,6 +6,7 @@ require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/syncoboard/syncoboard/sdks/go v0.0.0-20260607053328-3e330ed05b99
 )
 
 require (

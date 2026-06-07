@@ -14,7 +14,7 @@ go install github.com/syncoboard/syncoboard-cli@latest
 ```
 After installation, you can run the tool by simply typing:
 ```bash
-syncoboard
+syncoboard-cli
 ```
 
 ## Building and Running

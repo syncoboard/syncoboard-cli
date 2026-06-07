@@ -13,7 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"syncoboard/api"
+	"github.com/syncoboard/syncoboard-cli/api"
 )
 
 type Config struct {

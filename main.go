@@ -5,8 +5,8 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"syncoboard/api"
-	"syncoboard/ui"
+	"github.com/syncoboard/syncoboard-cli/api"
+	"github.com/syncoboard/syncoboard-cli/ui"
 )
 
 func main() {

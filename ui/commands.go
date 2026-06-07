@@ -13,8 +13,18 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/syncoboard/syncoboard-cli/api"
+	"github.com/syncoboard/syncoboard/sdks/go/api"
 )
+
+var ApiClient *api.Client
+
+func init() {
+	baseURL := os.Getenv("API_URL")
+	if baseURL == "" {
+		baseURL = "https://syncoboard.com/api"
+	}
+	ApiClient = api.NewClient(baseURL, "")
+}
 
 type Config struct {
 	Token string `json:"token"`
@@ -165,7 +175,7 @@ func executeCommand(m Model, input string) (Model, tea.Cmd) {
 		cfg := LoadConfig()
 		cfg.Token = ""
 		SaveConfig(cfg)
-		api.AuthToken = ""
+		ApiClient.Token = ""
 		m.outputHistory = append(m.outputHistory, "Logged out.")
 	case "clear":
 		m.outputHistory = []string{}
@@ -240,7 +250,7 @@ func handleLs(virtualPath string, args []string) tea.Cmd {
 		}
 		resolvedPath := resolvePath(virtualPath, targetPath)
 
-		resp, err := api.GetDirectory(resolvedPath)
+		resp, err := ApiClient.Directory.GetDirectory(resolvedPath)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -307,7 +317,7 @@ func handleCd(virtualPath string, args []string) tea.Cmd {
 		}
 		resolvedPath := resolvePath(virtualPath, targetPath)
 
-		resp, err := api.GetDirectory(resolvedPath)
+		resp, err := ApiClient.Directory.GetDirectory(resolvedPath)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -369,7 +379,7 @@ func handleDeleteWorkspace(args []string) tea.Cmd {
 			return OutputMsg{Lines: []string{"Error: Missing arguments. Usage: /delete-workspace <workspace_name>"}}
 		}
 		name := strings.Join(args, " ")
-		err := api.DeleteWorkspace(name)
+		_, err := ApiClient.Workspace.DeleteWorkspace(name)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -387,7 +397,7 @@ func handleUpdateWorkspaceStatus(args []string, isActive bool) tea.Cmd {
 			return OutputMsg{Lines: []string{fmt.Sprintf("Error: Missing arguments. Usage: /%s-workspace <workspace_name>", action)}}
 		}
 		name := strings.Join(args, " ")
-		err := api.UpdateWorkspaceStatus(name, isActive)
+		_, err := ApiClient.Workspace.UpdateWorkspaceStatus(name, isActive)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -401,7 +411,7 @@ func handleRestoreWorkspace(args []string) tea.Cmd {
 			return OutputMsg{Lines: []string{"Error: Missing arguments. Usage: /restore-workspace <workspace_name>"}}
 		}
 		name := args[0]
-		err := api.RestoreWorkspace(name)
+		_, err := ApiClient.Workspace.RestoreWorkspace(name)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -411,7 +421,7 @@ func handleRestoreWorkspace(args []string) tea.Cmd {
 
 func handleListDeletedBoards() tea.Cmd {
 	return func() tea.Msg {
-		boards, err := api.GetDeletedBoards()
+		boards, err := ApiClient.Board.GetDeletedBoards()
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -444,7 +454,7 @@ func handleDeleteBoard(args []string) tea.Cmd {
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
-		err = api.DeleteBoard(ws, board)
+		_, err = ApiClient.Board.DeleteBoard(ws, board)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -458,7 +468,7 @@ func handleRestoreBoard(args []string) tea.Cmd {
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
-		err = api.RestoreBoard(ws, board)
+		_, err = ApiClient.Board.RestoreBoard(ws, board)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -476,7 +486,7 @@ func handleUpdateBoardStatus(args []string, isActive bool) tea.Cmd {
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
-		err = api.UpdateBoardStatus(ws, board, isActive)
+		_, err = ApiClient.Board.UpdateBoardStatus(ws, board, isActive)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -494,7 +504,7 @@ func handleInviteMember(args []string) tea.Cmd {
 			return OutputMsg{Lines: []string{"Error: Invalid format. Usage: /invite-member <workspace_name>/<board_name> <user_id_or_email>"}}
 		}
 		ws, board, identifier := parts[0], parts[1], args[1]
-		err := api.InviteMember(ws, board, identifier)
+		_, err := ApiClient.Board.InviteMember(ws, board, identifier)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -512,7 +522,7 @@ func handleRemoveMember(args []string) tea.Cmd {
 			return OutputMsg{Lines: []string{"Error: Invalid format. Usage: /rmv-member <workspace_name>/<board_name> <user_id_or_email>"}}
 		}
 		ws, board, identifier := parts[0], parts[1], args[1]
-		err := api.RemoveMember(ws, board, identifier)
+		_, err := ApiClient.Board.RemoveMember(ws, board, identifier)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -545,7 +555,7 @@ func handleListTasks(virtualPath string, args []string) tea.Cmd {
 			fmt.Sscanf(args[2], "%d", &limit)
 		}
 
-		resp, err := api.ListTasks(ws, board, page, limit)
+		resp, err := ApiClient.Task.ListTasks(ws, board, page, limit)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -587,7 +597,7 @@ func handleAddTask(activeBoardId string, args []string) tea.Cmd {
 			return OutputMsg{Lines: []string{"Error: Missing task title. Usage: /add-task <title>"}}
 		}
 		title := strings.Join(args, " ")
-		err := api.AddTask(activeBoardId, title)
+		_, err := ApiClient.Task.AddTask(api.CreateTaskPayload{BoardID: activeBoardId, Title: title})
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -617,7 +627,7 @@ func handleUpdateTask(args []string) tea.Cmd {
 			return OutputMsg{Lines: []string{fmt.Sprintf("Error: Invalid status '%s'.", statusRaw)}}
 		}
 
-		err := api.UpdateTaskStatus(taskId, status)
+		_, err := ApiClient.Task.UpdateTaskStatus(taskId, status)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -631,7 +641,7 @@ func handleDeleteTask(args []string) tea.Cmd {
 			return OutputMsg{Lines: []string{"Error: Missing task id. Usage: /delete-task <task_id>"}}
 		}
 		taskId := args[0]
-		err := api.DeleteTask(taskId)
+		_, err := ApiClient.Task.DeleteTask(taskId)
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -645,7 +655,7 @@ func handleReportBug(args []string) tea.Cmd {
 			return OutputMsg{Lines: []string{"Error: Missing message. Usage: /report-bug <message>"}}
 		}
 		msg := strings.Join(args, " ")
-		err := api.ReportBug(msg)
+		_, err := ApiClient.Bug.ReportBug(api.BugReportPayload{Message: msg})
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
@@ -655,19 +665,19 @@ func handleReportBug(args []string) tea.Cmd {
 
 func handleUpdates() tea.Cmd {
 	return func() tea.Msg {
-		logsData, err := api.GetNotifications()
+		logsData, err := ApiClient.Notification.GetNotifications()
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
-		readData, err := api.GetReadState()
+		readData, err := ApiClient.Notification.GetReadState()
 		if err != nil {
 			return OutputMsg{Lines: []string{"Error: " + err.Error()}}
 		}
 
 		var readDate time.Time
 		hasReadDate := false
-		if readData.LastRead != "" {
-			parsedDate, err := time.Parse(time.RFC3339, readData.LastRead)
+		if readData.LastRead != nil && *readData.LastRead != "" {
+			parsedDate, err := time.Parse(time.RFC3339, *readData.LastRead)
 			if err == nil {
 				readDate = parsedDate
 				hasReadDate = true
@@ -675,7 +685,7 @@ func handleUpdates() tea.Cmd {
 		}
 
 		var lines []string
-		for _, log := range logsData.Logs {
+		for _, log := range logsData {
 			if hasReadDate && !log.CreatedAt.After(readDate) {
 				continue
 			}
@@ -734,7 +744,7 @@ func handleUpdates() tea.Cmd {
 			return OutputMsg{Lines: []string{"No new updates"}}
 		}
 
-		api.MarkAsRead()
+		ApiClient.Notification.MarkAsRead()
 		return OutputMsg{Lines: lines}
 	}
 }
@@ -809,7 +819,7 @@ func handleTabCompletion(m Model) (Model, tea.Cmd) {
 
 			resolvedPath := resolvePath(m.virtualPath, dirPath)
 
-			resp, err := api.GetDirectory(resolvedPath)
+			resp, err := ApiClient.Directory.GetDirectory(resolvedPath)
 			if err != nil {
 				return nil
 			}
@@ -867,21 +877,31 @@ type UpdateLastOnlineMsg struct {
 
 func updateLastOnlineCmd() tea.Cmd {
 	return func() tea.Msg {
-		err := api.UpdateLastOnline()
+		err := ApiClient.User.UpdateLastOnline()
 		return UpdateLastOnlineMsg{Err: err}
 	}
 }
 
 func fetchWorkspaces() tea.Cmd {
 	return func() tea.Msg {
-		ws, err := api.GetUserWorkspaces()
+		wsData, err := ApiClient.Workspace.GetUserWorkspaces(false)
 		if err != nil {
 			return WorkspacesMsg{Err: err}
 		}
+
 		var names []string
-		for _, w := range ws {
-			names = append(names, w.Name)
+
+		// Type assert since it returns interface{}
+		if wsList, ok := wsData.([]interface{}); ok {
+			for _, wItem := range wsList {
+				if wMap, ok := wItem.(map[string]interface{}); ok {
+					if name, ok := wMap["name"].(string); ok {
+						names = append(names, name)
+					}
+				}
+			}
 		}
+
 		return WorkspacesMsg{Names: names}
 	}
 }
@@ -901,7 +921,7 @@ func fetchTasks(virtualPath string) tea.Cmd {
 
 		if len(parts) >= 2 {
 			ws, board := parts[0], parts[1]
-			resp, err := api.ListTasks(ws, board, 1, 50)
+			resp, err := ApiClient.Task.ListTasks(ws, board, 1, 50)
 			if err != nil {
 				return TasksMsg{Err: err}
 			}
@@ -928,7 +948,7 @@ type TaskDetailsMsg struct {
 
 func fetchTaskDetails(taskId string) tea.Cmd {
 	return func() tea.Msg {
-		task, err := api.GetTask(taskId)
+		task, err := ApiClient.Task.GetTask(taskId)
 		if err != nil {
 			return TaskDetailsMsg{Err: err}
 		}
@@ -1026,7 +1046,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cfg := LoadConfig()
 		cfg.Token = msg.Token
 		SaveConfig(cfg)
-		api.AuthToken = msg.Token
+		ApiClient.Token = msg.Token
 		m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
 		m.viewport.GotoBottom()
 

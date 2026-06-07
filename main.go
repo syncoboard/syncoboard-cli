@@ -5,14 +5,13 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/syncoboard/syncoboard-cli/api"
 	"github.com/syncoboard/syncoboard-cli/ui"
 )
 
 func main() {
 	cfg := ui.LoadConfig()
 	if cfg.Token != "" {
-		api.AuthToken = cfg.Token
+		ui.ApiClient.Token = cfg.Token
 	}
 
 	p := tea.NewProgram(ui.InitialModel(), tea.WithAltScreen())

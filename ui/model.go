@@ -148,10 +148,8 @@ func (m Model) View() string {
 	inputLine := lipgloss.NewStyle().Padding(0, 1).Render(prompt + m.textInput.View())
 
 	appStyle := lipgloss.NewStyle().
-		Background(obsidianNight).
 		Foreground(syntaxGrey).
-		Width(m.width).
-		Height(m.height)
+		Background(obsidianNight)
 
 	viewContent := lipgloss.JoinVertical(lipgloss.Left,
 		topSection,
@@ -159,5 +157,9 @@ func (m Model) View() string {
 		inputLine,
 	)
 
-	return appStyle.Render(viewContent)
+	return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top,
+		appStyle.Render(viewContent),
+		lipgloss.WithWhitespaceBackground(obsidianNight),
+		lipgloss.WithWhitespaceChars(" "),
+	)
 }

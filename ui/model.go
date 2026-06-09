@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -29,6 +30,10 @@ type Model struct {
 	tasks       []string
 	taskDetails string
 
+	// Voice Call State
+	voiceEngine *VoiceEngine
+	voiceState  VoiceCallState
+
 	err error
 }
 
@@ -49,6 +54,7 @@ func InitialModel() Model {
 		outputHistory:  []string{"Welcome to Syncoboard TUI!", "Type /auth to login.", "Type /help to see commands."},
 		commandHistory: []string{},
 		historyIndex:   -1,
+		voiceState:     VoiceCallState{IsActive: false},
 	}
 }
 
@@ -96,46 +102,71 @@ func (m Model) View() string {
 	// Lipgloss includes borders in height (2 lines). 1 line for title. Leaving 7 lines.
 	maxContentLines := 7
 
-	// Left: Workspaces
-	wsContent := titleStyle.Render("Workspaces") + "\n"
-	if len(m.workspaces) == 0 {
-		wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No workspaces loaded.\nRun /cd to navigate.")
-	} else {
-		displayWorkspaces := m.workspaces
-		if len(displayWorkspaces) > maxContentLines {
-			displayWorkspaces = displayWorkspaces[:maxContentLines]
+	var topSection string
+	if m.voiceState.IsActive {
+		// Replace middle and right panels with Voice Call UI
+		wsContent := titleStyle.Render("Workspaces") + "\n"
+		if len(m.workspaces) == 0 {
+			wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No workspaces loaded.\nRun /cd to navigate.")
+		} else {
+			displayWorkspaces := m.workspaces
+			if len(displayWorkspaces) > maxContentLines {
+				displayWorkspaces = displayWorkspaces[:maxContentLines]
+			}
+			wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayWorkspaces, "\n"))
 		}
-		wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayWorkspaces, "\n"))
-	}
-	wsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(wsContent)
+		wsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(wsContent)
 
-	// Middle: Tasks
-	taskContent := titleStyle.Render("Tasks") + "\n"
-	if len(m.tasks) == 0 {
-		taskContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No tasks loaded.")
-	} else {
-		displayTasks := m.tasks
-		if len(displayTasks) > maxContentLines {
-			displayTasks = displayTasks[:maxContentLines]
+		voiceContent := titleStyle.Render("Voice Call (Active)") + "\n"
+		voiceContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(fmt.Sprintf("Status: %s\nPeers: %d\nMuted: %v", m.voiceState.StatusText, m.voiceState.PeerCount, m.voiceState.IsMuted))
+		if m.voiceState.Error != nil {
+			voiceContent += lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("\nError: %s", m.voiceState.Error.Error()))
 		}
-		taskContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayTasks, "\n"))
-	}
-	taskPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(taskContent)
+		voicePanel := panelStyle.Copy().Width(panelWidth * 2).Height(10).BorderForeground(neonPulse).Render(voiceContent)
 
-	// Right: Task Details
-	detailsContent := titleStyle.Render("Task Details") + "\n"
-	if m.taskDetails == "" {
-		detailsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("Select a task to view details.")
+		topSection = lipgloss.JoinHorizontal(lipgloss.Top, wsPanel, voicePanel)
 	} else {
-		lines := strings.Split(m.taskDetails, "\n")
-		if len(lines) > maxContentLines {
-			lines = lines[:maxContentLines]
+		// Left: Workspaces
+		wsContent := titleStyle.Render("Workspaces") + "\n"
+		if len(m.workspaces) == 0 {
+			wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No workspaces loaded.\nRun /cd to navigate.")
+		} else {
+			displayWorkspaces := m.workspaces
+			if len(displayWorkspaces) > maxContentLines {
+				displayWorkspaces = displayWorkspaces[:maxContentLines]
+			}
+			wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayWorkspaces, "\n"))
 		}
-		detailsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(lines, "\n"))
-	}
-	detailsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(detailsContent)
+		wsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(wsContent)
 
-	topSection := lipgloss.JoinHorizontal(lipgloss.Top, wsPanel, taskPanel, detailsPanel)
+		// Middle: Tasks
+		taskContent := titleStyle.Render("Tasks") + "\n"
+		if len(m.tasks) == 0 {
+			taskContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No tasks loaded.")
+		} else {
+			displayTasks := m.tasks
+			if len(displayTasks) > maxContentLines {
+				displayTasks = displayTasks[:maxContentLines]
+			}
+			taskContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayTasks, "\n"))
+		}
+		taskPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(taskContent)
+
+		// Right: Task Details
+		detailsContent := titleStyle.Render("Task Details") + "\n"
+		if m.taskDetails == "" {
+			detailsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("Select a task to view details.")
+		} else {
+			lines := strings.Split(m.taskDetails, "\n")
+			if len(lines) > maxContentLines {
+				lines = lines[:maxContentLines]
+			}
+			detailsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(lines, "\n"))
+		}
+		detailsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(detailsContent)
+
+		topSection = lipgloss.JoinHorizontal(lipgloss.Top, wsPanel, taskPanel, detailsPanel)
+	}
 
 	// Output area
 	outputBox := panelStyle.Copy().

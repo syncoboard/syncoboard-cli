@@ -1067,8 +1067,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.viewport.Width = msg.Width - 4
-		m.viewport.Height = msg.Height - 15
+
+		// Header Height: 1
+		// Top Section Height: max(m.height / 3, 10)
+		// Input Height: 1
+		// Borders/Padding: ~1
+		topSectionHeight := m.height / 3
+		if topSectionHeight < 10 {
+			topSectionHeight = 10
+		}
+
+		m.viewport.Width = msg.Width
+		// header(2 with border) + input(1) = 3
+		m.viewport.Height = msg.Height - topSectionHeight - 3
+		if m.viewport.Height < 0 {
+			m.viewport.Height = 0
+		}
+
 		m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
 		m.viewport.GotoBottom()
 

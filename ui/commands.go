@@ -231,7 +231,9 @@ func executeCommand(m Model, input string) (Model, tea.Cmd) {
 		cmd = handleReportBug(args)
 	case "updates":
 		cmd = handleUpdates()
-	case "tui", "classic", "board", "dashboard", "back", "forward", "settings", "add-board", "join-voice-call":
+	case "join-voice-call":
+		cmd = handleJoinVoiceCall(m)
+	case "tui", "classic", "board", "dashboard", "back", "forward", "settings", "add-board":
 		m.outputHistory = append(m.outputHistory, "Not supported in this version.")
 	default:
 		m.outputHistory = append(m.outputHistory, fmt.Sprintf("Command not found: %s", cmdName))
@@ -327,6 +329,15 @@ func handleCd(virtualPath string, args []string) tea.Cmd {
 			Type: resp.Type,
 			ID:   resp.ID,
 		}
+	}
+}
+
+func handleJoinVoiceCall(m Model) tea.Cmd {
+	return func() tea.Msg {
+		if m.activeBoardId == "" {
+			return OutputMsg{Lines: []string{"Error: You must be in a board directory to join a voice call. Use /cd to navigate to a board."}}
+		}
+		return StartVoiceCallMsg{BoardID: m.activeBoardId}
 	}
 }
 
@@ -764,7 +775,7 @@ func handleTabCompletion(m Model) (Model, tea.Cmd) {
 		"restore-workspace", "delete-board", "restore-board", "list-deleted-boards",
 		"activate-board", "deactivate-board", "invite-member", "rmv-member",
 		"list-tasks", "add-task", "update-task", "delete-task", "search-task", "select-task",
-		"report-bug", "updates", "auth",
+		"report-bug", "updates", "auth", "join-voice-call",
 	}
 
 	if len(parts) == 1 {
@@ -978,6 +989,21 @@ func fetchTaskDetails(taskId string) tea.Cmd {
 	}
 }
 
+type StartVoiceCallMsg struct {
+	BoardID string
+}
+
+type VoiceCallUpdateMsg struct {
+	State VoiceCallState
+}
+
+func listenToVoiceEngine(engine *VoiceEngine) tea.Cmd {
+	return func() tea.Msg {
+		state := <-engine.StateChan
+		return VoiceCallUpdateMsg{State: state}
+	}
+}
+
 // Update the Model's Update method to handle these messages
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
@@ -996,8 +1022,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.commandHistory = m.commandHistory[:100]
 				}
 				m.outputHistory = append(m.outputHistory, "> "+cmdStr)
-				m, cmd = executeCommand(m, cmdStr)
-				cmds = append(cmds, cmd)
+
+				if cmdStr == "/leave-voice-call" && m.voiceEngine != nil {
+					m.voiceEngine.Stop()
+					m.voiceEngine = nil
+					m.voiceState.IsActive = false
+					m.outputHistory = append(m.outputHistory, "Left voice call.")
+				} else if cmdStr == "/mute" && m.voiceEngine != nil {
+					m.voiceEngine.ToggleMute()
+				} else {
+					m, cmd = executeCommand(m, cmdStr)
+					cmds = append(cmds, cmd)
+				}
 			}
 			m.textInput.SetValue("")
 			m.historyIndex = -1
@@ -1095,6 +1131,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.outputHistory = append(m.outputHistory, fmt.Sprintf("Error fetching task details: %v", msg.Err))
 			m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
 			m.viewport.GotoBottom()
+		}
+
+	case StartVoiceCallMsg:
+		if m.voiceEngine != nil {
+			m.voiceEngine.Stop()
+		}
+
+		wsURL := "wss://syncoboard.com"
+
+		m.voiceEngine = NewVoiceEngine(msg.BoardID, wsURL)
+		err := m.voiceEngine.Start()
+		if err != nil {
+			m.outputHistory = append(m.outputHistory, fmt.Sprintf("Error starting voice call: %v", err))
+			m.voiceEngine = nil
+			m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
+			m.viewport.GotoBottom()
+		} else {
+			m.outputHistory = append(m.outputHistory, "Joining voice call... Type /leave-voice-call to exit, or /mute to toggle microphone.")
+			m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
+			m.viewport.GotoBottom()
+			cmds = append(cmds, listenToVoiceEngine(m.voiceEngine))
+		}
+
+	case VoiceCallUpdateMsg:
+		m.voiceState = msg.State
+		if m.voiceState.IsActive && m.voiceEngine != nil {
+			cmds = append(cmds, listenToVoiceEngine(m.voiceEngine))
 		}
 
 	case TabCompletionMsg:

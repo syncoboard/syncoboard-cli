@@ -44,9 +44,9 @@ func InitialModel() Model {
 	ti.Focus()
 	ti.CharLimit = 256
 	ti.Width = 50
-	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
-	ti.Cursor.Style = lipgloss.NewStyle().Foreground(neonPulse)
-	ti.TextStyle = lipgloss.NewStyle().Foreground(syntaxGrey)
+	ti.PlaceholderStyle = ItemStyle.Copy().Foreground(lipgloss.Color("#555555"))
+	ti.Cursor.Style = lipgloss.NewStyle().Foreground(ColorNeonPulse)
+	ti.TextStyle = ItemStyle
 
 	return Model{
 		virtualPath:    "/",
@@ -67,130 +67,157 @@ func (m Model) Init() tea.Cmd {
 	)
 }
 
-var (
-	// Visual Identity Colors
-	obsidianNight = lipgloss.Color("#0B0E14") // Background (optional)
-	voidGrey      = lipgloss.Color("#161B22") // Surface
-	neonPulse     = lipgloss.Color("#00F5FF") // Accent
-	gitGreen      = lipgloss.Color("#2EA043") // Status
-	syntaxGrey    = lipgloss.Color("#8B949E") // Typography
-
-	panelStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(voidGrey).
-			Background(voidGrey).
-			Padding(0, 1)
-
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(neonPulse).
-			Underline(true)
-
-	promptStyle = lipgloss.NewStyle().Foreground(neonPulse)
-	pathStyle   = lipgloss.NewStyle().Foreground(syntaxGrey)
-)
-
 func (m Model) View() string {
 	if m.width == 0 {
 		return "Initializing..."
 	}
 
-	// Calculate panel widths
-	panelWidth := (m.width - 6) / 3
+	// 1. Header Area
+	logo := LogoStyle.Render("SYNCOBOARD")
+	statusText := ItemStyle.Render("Connected")
+	if m.activeBoardId != "" {
+		statusText = ItemStyle.Render("Board: ") + HighlightStyle.Render(m.activeBoardId)
+	}
 
-	// Max lines for content to fit exactly in Height(10) panel.
-	// Lipgloss includes borders in height (2 lines). 1 line for title. Leaving 7 lines.
-	maxContentLines := 7
+	headerWidth := m.width - 2 // -2 for padding
+	if headerWidth < 0 {
+		headerWidth = 0
+	}
+
+	// Create space between logo and status
+	spacerWidth := headerWidth - lipgloss.Width(logo) - lipgloss.Width(statusText)
+	if spacerWidth < 0 {
+		spacerWidth = 0
+	}
+	spacer := strings.Repeat(" ", spacerWidth)
+	headerContent := logo + spacer + statusText
+	header := HeaderStyle.Width(m.width).Render(headerContent)
+
+	// Calculate panel widths (3 columns)
+	// Border takes 1 cell, so 2 borders = 2 cells.
+	// Total width available for columns: m.width - 2
+	availableWidth := m.width - 2
+	if availableWidth < 0 {
+		availableWidth = 0
+	}
+	colWidth := availableWidth / 3
+
+	// Top Section Height
+	// Dynamically adjust top section height (e.g. 1/3 of total height, min 10)
+	topSectionHeight := m.height / 3
+	if topSectionHeight < 10 {
+		topSectionHeight = 10
+	}
+	// Leave room for padding/titles
+	maxContentLines := topSectionHeight - 2
 
 	var topSection string
 	if m.voiceState.IsActive {
-		// Replace middle and right panels with Voice Call UI
-		wsContent := titleStyle.Render("Workspaces") + "\n"
+		// Left: Workspaces
+		wsTitle := TitleStyle.Render("Workspaces")
+		var wsLines []string
 		if len(m.workspaces) == 0 {
-			wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No workspaces loaded.\nRun /cd to navigate.")
+			wsLines = append(wsLines, ItemStyle.Render("No workspaces loaded."), ItemStyle.Render("Run /cd to navigate."))
 		} else {
-			displayWorkspaces := m.workspaces
-			if len(displayWorkspaces) > maxContentLines {
-				displayWorkspaces = displayWorkspaces[:maxContentLines]
+			for i, w := range m.workspaces {
+				if i >= maxContentLines {
+					break
+				}
+				wsLines = append(wsLines, ItemStyle.Render(w))
 			}
-			wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayWorkspaces, "\n"))
 		}
-		wsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(wsContent)
+		wsContent := lipgloss.JoinVertical(lipgloss.Left, append([]string{wsTitle}, wsLines...)...)
+		wsCol := lipgloss.NewStyle().Width(colWidth).Height(topSectionHeight).PaddingLeft(1).Render(wsContent)
 
-		voiceContent := titleStyle.Render("Voice Call (Active)") + "\n"
-		voiceContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(fmt.Sprintf("Status: %s\nPeers: %d\nMuted: %v", m.voiceState.StatusText, m.voiceState.PeerCount, m.voiceState.IsMuted))
+		// Right: Voice Call (spans remaining width)
+		voiceTitle := TitleStyle.Render("Voice Call (Active)")
+		voiceLines := []string{
+			ItemStyle.Render(fmt.Sprintf("Status: %s", m.voiceState.StatusText)),
+			ItemStyle.Render(fmt.Sprintf("Peers: %d", m.voiceState.PeerCount)),
+			ItemStyle.Render(fmt.Sprintf("Muted: %v", m.voiceState.IsMuted)),
+		}
 		if m.voiceState.Error != nil {
-			voiceContent += lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("\nError: %s", m.voiceState.Error.Error()))
+			voiceLines = append(voiceLines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("Error: %s", m.voiceState.Error.Error())))
 		}
-		voicePanel := panelStyle.Copy().Width(panelWidth * 2).Height(10).BorderForeground(neonPulse).Render(voiceContent)
+		voiceContent := lipgloss.JoinVertical(lipgloss.Left, append([]string{voiceTitle}, voiceLines...)...)
+		voiceCol := ColumnBorderStyle.Copy().Width(colWidth * 2).Height(topSectionHeight).BorderForeground(ColorNeonPulse).PaddingLeft(1).Render(voiceContent)
 
-		topSection = lipgloss.JoinHorizontal(lipgloss.Top, wsPanel, voicePanel)
+		columns := lipgloss.JoinHorizontal(lipgloss.Top, wsCol, voiceCol)
+		topSection = TopSectionStyle.Width(m.width).Height(topSectionHeight).Render(columns)
 	} else {
 		// Left: Workspaces
-		wsContent := titleStyle.Render("Workspaces") + "\n"
+		wsTitle := TitleStyle.Render("Workspaces")
+		var wsLines []string
 		if len(m.workspaces) == 0 {
-			wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No workspaces loaded.\nRun /cd to navigate.")
+			wsLines = append(wsLines, ItemStyle.Render("No workspaces loaded."), ItemStyle.Render("Run /cd to navigate."))
 		} else {
-			displayWorkspaces := m.workspaces
-			if len(displayWorkspaces) > maxContentLines {
-				displayWorkspaces = displayWorkspaces[:maxContentLines]
+			for i, w := range m.workspaces {
+				if i >= maxContentLines {
+					break
+				}
+				wsLines = append(wsLines, ItemStyle.Render(w))
 			}
-			wsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayWorkspaces, "\n"))
 		}
-		wsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(wsContent)
+		wsContent := lipgloss.JoinVertical(lipgloss.Left, append([]string{wsTitle}, wsLines...)...)
+		wsCol := lipgloss.NewStyle().Width(colWidth).Height(topSectionHeight).PaddingLeft(1).Render(wsContent)
 
 		// Middle: Tasks
-		taskContent := titleStyle.Render("Tasks") + "\n"
+		taskTitle := TitleStyle.Render("Tasks")
+		var taskLines []string
 		if len(m.tasks) == 0 {
-			taskContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("No tasks loaded.")
+			taskLines = append(taskLines, ItemStyle.Render("No tasks loaded."))
 		} else {
-			displayTasks := m.tasks
-			if len(displayTasks) > maxContentLines {
-				displayTasks = displayTasks[:maxContentLines]
+			for i, t := range m.tasks {
+				if i >= maxContentLines {
+					break
+				}
+				taskLines = append(taskLines, ItemStyle.Render(t))
 			}
-			taskContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(displayTasks, "\n"))
 		}
-		taskPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(taskContent)
+		taskContent := lipgloss.JoinVertical(lipgloss.Left, append([]string{taskTitle}, taskLines...)...)
+		taskCol := ColumnBorderStyle.Width(colWidth).Height(topSectionHeight).PaddingLeft(1).Render(taskContent)
 
 		// Right: Task Details
-		detailsContent := titleStyle.Render("Task Details") + "\n"
+		detailsTitle := TitleStyle.Render("Task Details")
+		var detailLines []string
 		if m.taskDetails == "" {
-			detailsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render("Select a task to view details.")
+			detailLines = append(detailLines, ItemStyle.Render("Select a task to view details."))
 		} else {
 			lines := strings.Split(m.taskDetails, "\n")
-			if len(lines) > maxContentLines {
-				lines = lines[:maxContentLines]
+			for i, l := range lines {
+				if i >= maxContentLines {
+					break
+				}
+				detailLines = append(detailLines, ItemStyle.Render(l))
 			}
-			detailsContent += lipgloss.NewStyle().Foreground(syntaxGrey).Render(strings.Join(lines, "\n"))
 		}
-		detailsPanel := panelStyle.Copy().Width(panelWidth).Height(10).Render(detailsContent)
+		detailsContent := lipgloss.JoinVertical(lipgloss.Left, append([]string{detailsTitle}, detailLines...)...)
+		detailsCol := ColumnBorderStyle.Width(colWidth).Height(topSectionHeight).PaddingLeft(1).Render(detailsContent)
 
-		topSection = lipgloss.JoinHorizontal(lipgloss.Top, wsPanel, taskPanel, detailsPanel)
+		columns := lipgloss.JoinHorizontal(lipgloss.Top, wsCol, taskCol, detailsCol)
+		topSection = TopSectionStyle.Width(m.width).Height(topSectionHeight).Render(columns)
 	}
 
-	// Output area
-	outputBox := panelStyle.Copy().
-		Width(m.width - 2).
+	// Output area (Terminal Viewport)
+	outputBox := OutputBoxStyle.
+		Width(m.width).
 		Height(m.viewport.Height).
 		Render(m.viewport.View())
 
 	// Input area
-	prompt := pathStyle.Render(m.virtualPath+" ") + promptStyle.Render("$ ")
-	inputLine := lipgloss.NewStyle().Padding(0, 1).Render(prompt + m.textInput.View())
-
-	appStyle := lipgloss.NewStyle().
-		Foreground(syntaxGrey).
-		Background(obsidianNight)
+	prompt := PathStyle.Render(m.virtualPath+" ") + PromptStyle.Render("$ ")
+	inputLine := InputLineStyle.Width(m.width).Render(prompt + m.textInput.View())
 
 	viewContent := lipgloss.JoinVertical(lipgloss.Left,
+		header,
 		topSection,
 		outputBox,
 		inputLine,
 	)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top,
-		appStyle.Render(viewContent),
-		lipgloss.WithWhitespaceBackground(obsidianNight),
+		AppStyle.Render(viewContent),
+		lipgloss.WithWhitespaceBackground(ColorObsidianNight),
 		lipgloss.WithWhitespaceChars(" "),
 	)
 }

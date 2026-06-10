@@ -11,7 +11,7 @@ require (
 	github.com/pion/mediadevices v0.10.0
 	github.com/pion/rtp v1.8.26
 	github.com/pion/webrtc/v4 v4.1.8
-	github.com/syncoboard/syncoboard/sdks/go v0.0.0-20260609101228-d7a89fcadcd4
+	github.com/syncoboard/syncoboard/sdks/go v0.0.0-20260610080907-02289b30452f
 	gopkg.in/hraban/opus.v2 v2.0.0-20230925203106-0188a62cb302
 )
 
@@ -26,6 +26,7 @@ require (
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.5.0 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect

@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/pion/mediadevices"
 	"github.com/pion/mediadevices/pkg/codec/opus"
 	_ "github.com/pion/mediadevices/pkg/driver/microphone"
 	"github.com/pion/webrtc/v4"
+	"github.com/syncoboard/syncoboard/sdks/go/ws"
 )
 
 type VoiceCallState struct {
@@ -23,9 +23,9 @@ type VoiceCallState struct {
 }
 
 type VoiceEngine struct {
-	boardID   string
-	apiClient *VoiceClient
-	peerID    string
+	boardID  string
+	wsClient *ws.Client
+	peerID   string
 
 	audioStream mediadevices.MediaStream
 	audioTrack  webrtc.TrackLocal
@@ -42,12 +42,12 @@ type VoiceEngine struct {
 	stateMutex sync.RWMutex
 }
 
-func NewVoiceEngine(boardID string, apiClient *VoiceClient) *VoiceEngine {
+func NewVoiceEngine(boardID string, wsURL string) *VoiceEngine {
 	player, _ := NewAudioPlayer()
 	ctx, cancel := context.WithCancel(context.Background())
 	return &VoiceEngine{
 		boardID:     boardID,
-		apiClient:   apiClient,
+		wsClient:    ws.NewClient(wsURL),
 		peerID:      uuid.New().String(),
 		audioPlayer: player,
 		peers:       make(map[string]*webrtc.PeerConnection),
@@ -128,10 +128,52 @@ func (ve *VoiceEngine) Start() error {
 
 	ve.audioTrack = audioTracks[0].(webrtc.TrackLocal)
 
-	// 2. Join the voice call via API
-	err = ve.apiClient.JoinVoiceCall(ve.boardID, ve.peerID)
+	// 2. Setup WebSocket Callbacks
+	ve.wsClient.OnVoiceJoin(func(peerId string) {
+		if peerId == ve.peerID {
+			return
+		}
+
+		ve.updateState(func(s *VoiceCallState) {
+			s.PeerCount++
+		})
+
+		ve.peersMutex.Lock()
+		if _, exists := ve.peers[peerId]; !exists {
+			go ve.createPeerConnection(peerId, true)
+		}
+		ve.peersMutex.Unlock()
+	})
+
+	ve.wsClient.OnVoiceLeave(func(peerId string) {
+		ve.peersMutex.Lock()
+		if pc, exists := ve.peers[peerId]; exists {
+			pc.Close()
+			delete(ve.peers, peerId)
+			ve.updateState(func(s *VoiceCallState) {
+				s.PeerCount--
+			})
+		}
+		ve.peersMutex.Unlock()
+	})
+
+	ve.wsClient.OnVoiceSignal(func(fromPeerId string, signal map[string]interface{}) {
+		ve.handleSignal(fromPeerId, signal)
+	})
+
+	// 3. Connect to WebSocket
+	if err := ve.wsClient.Connect(); err != nil {
+		errRet := fmt.Errorf("failed to connect to websocket: %w", err)
+		ve.updateState(func(s *VoiceCallState) {
+			s.Error = errRet
+		})
+		return errRet
+	}
+
+	// 4. Join the voice call via WebSocket
+	err = ve.wsClient.JoinVoice(ve.boardID, ve.peerID)
 	if err != nil {
-		errRet := fmt.Errorf("failed to join call via API: %w", err)
+		errRet := fmt.Errorf("failed to join call via WS: %w", err)
 		ve.updateState(func(s *VoiceCallState) {
 			s.Error = errRet
 		})
@@ -141,10 +183,6 @@ func (ve *VoiceEngine) Start() error {
 	ve.updateState(func(s *VoiceCallState) {
 		s.StatusText = "Connected"
 	})
-
-	// 3. Start signaling loops
-	go ve.pollPeers()
-	go ve.pollSignals()
 
 	return nil
 }
@@ -177,66 +215,13 @@ func (ve *VoiceEngine) Stop() {
 	ve.peers = make(map[string]*webrtc.PeerConnection)
 	ve.peersMutex.Unlock()
 
-	_ = ve.apiClient.LeaveVoiceCall(ve.boardID)
+	_ = ve.wsClient.LeaveVoice(ve.boardID, ve.peerID)
+	ve.wsClient.Close()
 
 	ve.updateState(func(s *VoiceCallState) {
 		s.IsActive = false
 		s.StatusText = "Disconnected"
 	})
-}
-
-func (ve *VoiceEngine) pollPeers() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ve.ctx.Done():
-			return
-		case <-ticker.C:
-			peers, err := ve.apiClient.GetActivePeers(ve.boardID)
-			if err != nil {
-				continue // Ignore errors during polling
-			}
-
-			ve.updateState(func(s *VoiceCallState) {
-				s.PeerCount = len(peers) + 1 // +1 for self
-			})
-
-			ve.peersMutex.Lock()
-			for _, p := range peers {
-				if p == ve.peerID {
-					continue
-				}
-				if _, exists := ve.peers[p]; !exists {
-					// Need to create an offer for this new peer
-					go ve.createPeerConnection(p, true)
-				}
-			}
-			ve.peersMutex.Unlock()
-		}
-	}
-}
-
-func (ve *VoiceEngine) pollSignals() {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ve.ctx.Done():
-			return
-		case <-ticker.C:
-			signals, err := ve.apiClient.GetSignals(ve.boardID)
-			if err != nil {
-				continue
-			}
-
-			for _, sig := range signals {
-				ve.handleSignal(sig)
-			}
-		}
-	}
 }
 
 func (ve *VoiceEngine) createPeerConnection(peerID string, isInitiator bool) *webrtc.PeerConnection {
@@ -267,9 +252,9 @@ func (ve *VoiceEngine) createPeerConnection(peerID string, isInitiator bool) *we
 			return
 		}
 		cJSON, _ := json.Marshal(c.ToJSON())
-		_ = ve.apiClient.SendSignal(ve.boardID, peerID, SignalPayload{
-			Type: "candidate",
-			Data: string(cJSON),
+		_ = ve.wsClient.SendSignal(peerID, ve.peerID, map[string]interface{}{
+			"type": "candidate",
+			"data": string(cJSON),
 		})
 	})
 
@@ -302,9 +287,9 @@ func (ve *VoiceEngine) createPeerConnection(peerID string, isInitiator bool) *we
 			err = pc.SetLocalDescription(offer)
 			if err == nil {
 				oJSON, _ := json.Marshal(offer)
-				_ = ve.apiClient.SendSignal(ve.boardID, peerID, SignalPayload{
-					Type: "offer",
-					Data: string(oJSON),
+				_ = ve.wsClient.SendSignal(peerID, ve.peerID, map[string]interface{}{
+					"type": "offer",
+					"data": string(oJSON),
 				})
 			}
 		}
@@ -313,40 +298,47 @@ func (ve *VoiceEngine) createPeerConnection(peerID string, isInitiator bool) *we
 	return pc
 }
 
-func (ve *VoiceEngine) handleSignal(sig PeerSignal) {
+func (ve *VoiceEngine) handleSignal(peerID string, sig map[string]interface{}) {
 	ve.peersMutex.Lock()
-	pc, exists := ve.peers[sig.PeerID]
+	pc, exists := ve.peers[peerID]
 	ve.peersMutex.Unlock()
 
-	if !exists && sig.Signal.Type == "offer" {
-		pc = ve.createPeerConnection(sig.PeerID, false)
+	sigType, typeOk := sig["type"].(string)
+	sigData, dataOk := sig["data"].(string)
+
+	if !typeOk || !dataOk {
+		return
+	}
+
+	if !exists && sigType == "offer" {
+		pc = ve.createPeerConnection(peerID, false)
 	}
 
 	if pc == nil {
 		return
 	}
 
-	switch sig.Signal.Type {
+	switch sigType {
 	case "offer":
 		var sd webrtc.SessionDescription
-		_ = json.Unmarshal([]byte(sig.Signal.Data), &sd)
+		_ = json.Unmarshal([]byte(sigData), &sd)
 		_ = pc.SetRemoteDescription(sd)
 		answer, err := pc.CreateAnswer(nil)
 		if err == nil {
 			_ = pc.SetLocalDescription(answer)
 			aJSON, _ := json.Marshal(answer)
-			_ = ve.apiClient.SendSignal(ve.boardID, sig.PeerID, SignalPayload{
-				Type: "answer",
-				Data: string(aJSON),
+			_ = ve.wsClient.SendSignal(peerID, ve.peerID, map[string]interface{}{
+				"type": "answer",
+				"data": string(aJSON),
 			})
 		}
 	case "answer":
 		var sd webrtc.SessionDescription
-		_ = json.Unmarshal([]byte(sig.Signal.Data), &sd)
+		_ = json.Unmarshal([]byte(sigData), &sd)
 		_ = pc.SetRemoteDescription(sd)
 	case "candidate":
 		var candidate webrtc.ICECandidateInit
-		_ = json.Unmarshal([]byte(sig.Signal.Data), &candidate)
+		_ = json.Unmarshal([]byte(sigData), &candidate)
 		_ = pc.AddICECandidate(candidate)
 	}
 }

@@ -1138,10 +1138,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.voiceEngine.Stop()
 		}
 
-		// Setup WebSocket URL, usually derivated from API Base URL
-		// E.g. https://api.syncoboard.com -> wss://api.syncoboard.com or similar
-		// Here we default to a standard endpoint, or you could parse it from ApiClient.BaseURL
-		wsURL := "ws://localhost:3002" // Default for local testing if not configured
+		wsURL := "wss://syncoboard.com"
 
 		m.voiceEngine = NewVoiceEngine(msg.BoardID, wsURL)
 		err := m.voiceEngine.Start()

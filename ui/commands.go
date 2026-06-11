@@ -233,6 +233,21 @@ func executeCommand(m Model, input string) (Model, tea.Cmd) {
 		cmd = handleUpdates()
 	case "join-voice-call":
 		cmd = handleJoinVoiceCall(m)
+	case "leave-voice-call":
+		if m.voiceEngine != nil {
+			m.voiceEngine.Stop()
+			m.voiceEngine = nil
+			m.voiceState.IsActive = false
+			m.outputHistory = append(m.outputHistory, "Left voice call.")
+		} else {
+			m.outputHistory = append(m.outputHistory, "Error: Not currently in a voice call.")
+		}
+	case "mute":
+		if m.voiceEngine != nil {
+			m.voiceEngine.ToggleMute()
+		} else {
+			m.outputHistory = append(m.outputHistory, "Error: Not currently in a voice call.")
+		}
 	case "tui", "classic", "board", "dashboard", "back", "forward", "settings", "add-board":
 		m.outputHistory = append(m.outputHistory, "Not supported in this version.")
 	default:
@@ -775,7 +790,7 @@ func handleTabCompletion(m Model) (Model, tea.Cmd) {
 		"restore-workspace", "delete-board", "restore-board", "list-deleted-boards",
 		"activate-board", "deactivate-board", "invite-member", "rmv-member",
 		"list-tasks", "add-task", "update-task", "delete-task", "search-task", "select-task",
-		"report-bug", "updates", "auth", "join-voice-call",
+		"report-bug", "updates", "auth", "join-voice-call", "leave-voice-call", "mute",
 	}
 
 	if len(parts) == 1 {
@@ -1023,17 +1038,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.outputHistory = append(m.outputHistory, "> "+cmdStr)
 
-				if cmdStr == "/leave-voice-call" && m.voiceEngine != nil {
-					m.voiceEngine.Stop()
-					m.voiceEngine = nil
-					m.voiceState.IsActive = false
-					m.outputHistory = append(m.outputHistory, "Left voice call.")
-				} else if cmdStr == "/mute" && m.voiceEngine != nil {
-					m.voiceEngine.ToggleMute()
-				} else {
-					m, cmd = executeCommand(m, cmdStr)
-					cmds = append(cmds, cmd)
-				}
+				m, cmd = executeCommand(m, cmdStr)
+				cmds = append(cmds, cmd)
 			}
 			m.textInput.SetValue("")
 			m.historyIndex = -1

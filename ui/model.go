@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -9,6 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 type Model struct {
 	virtualPath    string
@@ -45,7 +48,7 @@ func InitialModel() Model {
 	ti.CharLimit = 256
 	ti.Width = 50
 	ti.PlaceholderStyle = ItemStyle.Copy().Foreground(lipgloss.Color("#555555"))
-	ti.Cursor.Style = lipgloss.NewStyle().Foreground(ColorNeonPulse)
+	ti.Cursor.Style = lipgloss.NewStyle().Foreground(ColorNeonPulse).Background(ColorVoidGrey)
 	ti.TextStyle = ItemStyle
 
 	return Model{
@@ -84,74 +87,108 @@ func (m Model) renderHeader() string {
 	if spacerWidth < 0 {
 		spacerWidth = 0
 	}
-	spacer := strings.Repeat(" ", spacerWidth)
+	spacer := lipgloss.NewStyle().Background(ColorVoidGrey).Render(strings.Repeat(" ", spacerWidth))
 	headerContent := logo + spacer + statusText
 	return HeaderStyle.Width(m.width).Render(headerContent)
 }
 
 func (m Model) renderWorkspacesColumn(colWidth, topSectionHeight, maxContentLines int) string {
-	wsTitle := TitleStyle.Render("Workspaces")
+	contentWidth := colWidth - 1 // padding left
+	wsTitle := TitleStyle.Width(contentWidth).Render("Workspaces")
 	var wsLines []string
 	if len(m.workspaces) == 0 {
-		wsLines = append(wsLines, ItemStyle.Render("No workspaces loaded."), ItemStyle.Render("Run /cd to navigate."))
+		wsLines = append(wsLines, ItemStyle.Width(contentWidth).Render("No workspaces loaded."))
+		wsLines = append(wsLines, ItemStyle.Width(contentWidth).Render("Run /cd to navigate."))
 	} else {
 		for i, w := range m.workspaces {
 			if i >= maxContentLines {
 				break
 			}
-			wsLines = append(wsLines, ItemStyle.Render(w))
+			wsLines = append(wsLines, ItemStyle.Width(contentWidth).Render(w))
 		}
 	}
-	wsContent := lipgloss.JoinVertical(lipgloss.Left, append([]string{wsTitle}, wsLines...)...)
-	return lipgloss.NewStyle().Width(colWidth).Height(topSectionHeight).PaddingLeft(1).Render(wsContent)
+	var allLines []string
+	allLines = append(allLines, wsTitle)
+	allLines = append(allLines, wsLines...)
+	for len(allLines) < topSectionHeight {
+		allLines = append(allLines, ItemStyle.Width(contentWidth).Render(strings.Repeat(" ", contentWidth)))
+	}
+	wsContent := strings.Join(allLines, "\n")
+	return lipgloss.NewStyle().Width(colWidth).Height(topSectionHeight).Background(ColorVoidGrey).PaddingLeft(1).Render(wsContent)
 }
 
 func (m Model) renderVoiceCallColumn(colWidth, topSectionHeight int) string {
-	voiceTitle := TitleStyle.Render("Voice Call (Active)")
+	contentWidth := colWidth*2 - 2 // border left + padding left
+	voiceTitle := TitleStyle.Width(contentWidth).Render("Voice Call (Active)")
 	voiceLines := []string{
-		ItemStyle.Render(fmt.Sprintf("Status: %s", m.voiceState.StatusText)),
-		ItemStyle.Render(fmt.Sprintf("Peers: %d", m.voiceState.PeerCount)),
-		ItemStyle.Render(fmt.Sprintf("Muted: %v", m.voiceState.IsMuted)),
+		ItemStyle.Width(contentWidth).Render(fmt.Sprintf("Status: %s", m.voiceState.StatusText)),
+		ItemStyle.Width(contentWidth).Render(fmt.Sprintf("Peers: %d", m.voiceState.PeerCount)),
+		ItemStyle.Width(contentWidth).Render(fmt.Sprintf("Muted: %v", m.voiceState.IsMuted)),
 	}
 	if m.voiceState.Error != nil {
-		voiceLines = append(voiceLines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("Error: %s", m.voiceState.Error.Error())))
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Background(ColorVoidGrey).Width(contentWidth)
+		voiceLines = append(voiceLines, errStyle.Render(fmt.Sprintf("Error: %s", m.voiceState.Error.Error())))
 	}
-	voiceContent := lipgloss.JoinVertical(lipgloss.Left, append([]string{voiceTitle}, voiceLines...)...)
-	return ColumnBorderStyle.Copy().Width(colWidth * 2).Height(topSectionHeight).BorderForeground(ColorNeonPulse).PaddingLeft(1).Render(voiceContent)
+	var allLines []string
+	allLines = append(allLines, voiceTitle)
+	allLines = append(allLines, voiceLines...)
+	for len(allLines) < topSectionHeight {
+		allLines = append(allLines, ItemStyle.Width(contentWidth).Render(strings.Repeat(" ", contentWidth)))
+	}
+	voiceContent := strings.Join(allLines, "\n")
+	return ColumnBorderStyle.Copy().Width(colWidth * 2).Height(topSectionHeight).BorderForeground(ColorNeonPulse).Background(ColorVoidGrey).PaddingLeft(1).Render(voiceContent)
 }
 
 func (m Model) renderTasksColumn(colWidth, topSectionHeight, maxContentLines int) string {
-	taskTitle := TitleStyle.Render("Tasks")
+	contentWidth := colWidth - 2 // border left + padding left
+	taskTitle := TitleStyle.Width(contentWidth).Render("Tasks")
 	var taskLines []string
 	if len(m.tasks) == 0 {
-		taskLines = append(taskLines, ItemStyle.Render("No tasks loaded."))
+		taskLines = append(taskLines, ItemStyle.Width(contentWidth).Render("No tasks loaded."))
 	} else {
 		for i, t := range m.tasks {
 			if i >= maxContentLines {
 				break
 			}
-			taskLines = append(taskLines, ItemStyle.Render(t))
+			taskLines = append(taskLines, ItemStyle.Width(contentWidth).Render(t))
 		}
 	}
-	taskContent := lipgloss.JoinVertical(lipgloss.Left, append([]string{taskTitle}, taskLines...)...)
+	var allLines []string
+	allLines = append(allLines, taskTitle)
+	allLines = append(allLines, taskLines...)
+	for len(allLines) < topSectionHeight {
+		allLines = append(allLines, ItemStyle.Width(contentWidth).Render(strings.Repeat(" ", contentWidth)))
+	}
+	taskContent := strings.Join(allLines, "\n")
 	return ColumnBorderStyle.Width(colWidth).Height(topSectionHeight).PaddingLeft(1).Render(taskContent)
 }
 
 func (m Model) renderTaskDetailsColumn(colWidth, topSectionHeight, maxContentLines int) string {
-	detailsTitle := TitleStyle.Render("Task Details")
+	contentWidth := colWidth - 2 // border left + padding left
+	detailsTitle := TitleStyle.Width(contentWidth).Render("Task Details")
 	var detailLines []string
 	if m.taskDetails == "" {
-		detailLines = append(detailLines, ItemStyle.Render("Select a task to view details."))
+		detailLines = append(detailLines, ItemStyle.Width(contentWidth).Render("Select a task to view details."))
 	} else {
 		lines := strings.Split(m.taskDetails, "\n")
 		for i, l := range lines {
 			if i >= maxContentLines {
 				break
 			}
-			detailLines = append(detailLines, ItemStyle.Render(l))
+			clean := ansiRE.ReplaceAllString(l, "")
+			if clean == "" {
+				clean = " "
+			}
+			detailLines = append(detailLines, ItemStyle.Width(contentWidth).Render(clean))
 		}
 	}
-	detailsContent := lipgloss.JoinVertical(lipgloss.Left, append([]string{detailsTitle}, detailLines...)...)
+	var allLines []string
+	allLines = append(allLines, detailsTitle)
+	allLines = append(allLines, detailLines...)
+	for len(allLines) < topSectionHeight {
+		allLines = append(allLines, ItemStyle.Width(contentWidth).Render(strings.Repeat(" ", contentWidth)))
+	}
+	detailsContent := strings.Join(allLines, "\n")
 	return ColumnBorderStyle.Width(colWidth).Height(topSectionHeight).PaddingLeft(1).Render(detailsContent)
 }
 
@@ -179,7 +216,15 @@ func (m Model) renderOutputBox() string {
 
 func (m Model) renderInputLine() string {
 	prompt := PathStyle.Render(m.virtualPath+" ") + PromptStyle.Render("$ ")
-	return InputLineStyle.Width(m.width).Render(prompt + m.textInput.View())
+	inputContent := prompt + m.textInput.View()
+	contentWidth := lipgloss.Width(inputContent)
+	padWidth := m.width - 1 - contentWidth // -1 for left padding
+	if padWidth < 0 {
+		padWidth = 0
+	}
+	padStyle := lipgloss.NewStyle().Background(ColorVoidGrey)
+	padded := " " + inputContent + padStyle.Render(strings.Repeat(" ", padWidth))
+	return lipgloss.NewStyle().Background(ColorVoidGrey).Height(1).Render(padded)
 }
 
 func (m Model) View() string {

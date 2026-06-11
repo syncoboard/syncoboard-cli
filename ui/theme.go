@@ -28,28 +28,33 @@ var (
 	ColumnBorderStyle = lipgloss.NewStyle().
 				BorderStyle(lipgloss.NormalBorder()).
 				BorderForeground(lipgloss.Color("#30363D")). // Subtle border color
-				BorderLeft(true)
+				BorderLeft(true).
+				Background(ColorVoidGrey)
 
 	TitleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(ColorNeonPulse).
-			MarginBottom(1) // Add breathing room
+			Background(ColorVoidGrey).
+			PaddingBottom(1) // Add breathing room
 
 	ItemStyle = lipgloss.NewStyle().
-			Foreground(ColorSyntaxGrey)
+			Foreground(ColorSyntaxGrey).
+			Background(ColorVoidGrey)
 
 	HighlightStyle = lipgloss.NewStyle().
-			Foreground(ColorNeonPulse)
+			Foreground(ColorNeonPulse).
+			Background(ColorVoidGrey)
 
 	// Output area feels like an embedded terminal pane without heavy borders
 	OutputBoxStyle = lipgloss.NewStyle().
 			Background(ColorObsidianNight)
 
 	// Input styles
-	PromptStyle    = lipgloss.NewStyle().Foreground(ColorNeonPulse).Bold(true)
-	PathStyle      = lipgloss.NewStyle().Foreground(ColorSyntaxGrey).Italic(true)
+	PromptStyle    = lipgloss.NewStyle().Foreground(ColorNeonPulse).Bold(true).Background(ColorVoidGrey)
+	PathStyle      = lipgloss.NewStyle().Foreground(ColorSyntaxGrey).Italic(true).Background(ColorVoidGrey)
 	InputLineStyle = lipgloss.NewStyle().
 			Background(ColorVoidGrey).
+			Height(1).
 			Padding(0, 1)
 
 	// Header/Status Bar
@@ -62,5 +67,6 @@ var (
 
 	LogoStyle = lipgloss.NewStyle().
 			Foreground(ColorNeonPulse).
-			Bold(true)
+			Bold(true).
+			Background(ColorVoidGrey)
 )

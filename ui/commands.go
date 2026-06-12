@@ -1092,7 +1092,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
 
-
 	case OutputMsg:
 		isAtBottom := m.viewport.AtBottom()
 		m.outputHistory = append(m.outputHistory, msg.Lines...)

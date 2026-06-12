@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,9 +52,22 @@ func InitialModel() Model {
 	ti.Cursor.Style = lipgloss.NewStyle().Foreground(ColorNeonPulse).Background(ColorVoidGrey)
 	ti.TextStyle = ItemStyle
 
+	vp := viewport.New(0, 0) // Width and Height will be set in WindowSizeMsg
+	// We disable up and down to not conflict with command history navigation.
+	// We enable page up, page down, half page up (ctrl+up), half page down (ctrl+down).
+	vp.KeyMap = viewport.KeyMap{
+		PageDown:     key.NewBinding(key.WithKeys("pgdown", " ", "f", "ctrl+f")),
+		PageUp:       key.NewBinding(key.WithKeys("pgup", "b", "ctrl+b")),
+		HalfPageUp:   key.NewBinding(key.WithKeys("ctrl+up", "u", "ctrl+u")),
+		HalfPageDown: key.NewBinding(key.WithKeys("ctrl+down", "d", "ctrl+d")),
+		Up:           key.NewBinding(key.WithKeys("")), // disabled
+		Down:         key.NewBinding(key.WithKeys("")), // disabled
+	}
+
 	return Model{
 		virtualPath:    "/",
 		textInput:      ti,
+		viewport:       vp,
 		outputHistory:  []string{"Welcome to Syncoboard TUI!", "Type /auth to login.", "Type /help to see commands."},
 		commandHistory: []string{},
 		historyIndex:   -1,

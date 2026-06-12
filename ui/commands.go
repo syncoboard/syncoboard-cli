@@ -1091,23 +1091,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
-		m.viewport.GotoBottom()
+
 
 	case OutputMsg:
+		isAtBottom := m.viewport.AtBottom()
 		m.outputHistory = append(m.outputHistory, msg.Lines...)
 		m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
-		m.viewport.GotoBottom()
+		if isAtBottom {
+			m.viewport.GotoBottom()
+		}
 
 	case AuthSuccessMsg:
+		isAtBottom := m.viewport.AtBottom()
 		m.outputHistory = append(m.outputHistory, "Authentication successful!")
 		cfg := LoadConfig()
 		cfg.Token = msg.Token
 		SaveConfig(cfg)
 		ApiClient.Token = msg.Token
 		m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
-		m.viewport.GotoBottom()
+		if isAtBottom {
+			m.viewport.GotoBottom()
+		}
 
 	case CdResultMsg:
+		isAtBottom := m.viewport.AtBottom()
 		m.virtualPath = msg.Path
 		m.outputHistory = append(m.outputHistory, fmt.Sprintf("Changed directory to %s", msg.Path))
 		if msg.Type == "Board" {
@@ -1125,33 +1132,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tasks = []string{}
 		}
 		m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
-		m.viewport.GotoBottom()
+		if isAtBottom {
+			m.viewport.GotoBottom()
+		}
 
 	case WorkspacesMsg:
+		isAtBottom := m.viewport.AtBottom()
 		if msg.Err == nil {
 			m.workspaces = msg.Names
 		} else {
 			m.outputHistory = append(m.outputHistory, fmt.Sprintf("Error fetching workspaces: %v", msg.Err))
 			m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
-			m.viewport.GotoBottom()
+			if isAtBottom {
+				m.viewport.GotoBottom()
+			}
 		}
 
 	case TasksMsg:
+		isAtBottom := m.viewport.AtBottom()
 		if msg.Err == nil {
 			m.tasks = msg.Tasks
 		} else {
 			m.outputHistory = append(m.outputHistory, fmt.Sprintf("Error fetching tasks: %v", msg.Err))
 			m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
-			m.viewport.GotoBottom()
+			if isAtBottom {
+				m.viewport.GotoBottom()
+			}
 		}
 
 	case TaskDetailsMsg:
+		isAtBottom := m.viewport.AtBottom()
 		if msg.Err == nil {
 			m.taskDetails = msg.Details
 		} else {
 			m.outputHistory = append(m.outputHistory, fmt.Sprintf("Error fetching task details: %v", msg.Err))
 			m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
-			m.viewport.GotoBottom()
+			if isAtBottom {
+				m.viewport.GotoBottom()
+			}
 		}
 
 	case StartVoiceCallMsg:
@@ -1162,16 +1180,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		wsURL := "wss://syncoboard.com"
 
 		m.voiceEngine = NewVoiceEngine(msg.BoardID, wsURL)
+		isAtBottom := m.viewport.AtBottom()
 		err := m.voiceEngine.Start()
 		if err != nil {
 			m.outputHistory = append(m.outputHistory, fmt.Sprintf("Error starting voice call: %v", err))
 			m.voiceEngine = nil
 			m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
-			m.viewport.GotoBottom()
+			if isAtBottom {
+				m.viewport.GotoBottom()
+			}
 		} else {
 			m.outputHistory = append(m.outputHistory, "Joining voice call... Type /leave-voice-call to exit, or /mute to toggle microphone.")
 			m.viewport.SetContent(strings.Join(m.outputHistory, "\n"))
-			m.viewport.GotoBottom()
+			if isAtBottom {
+				m.viewport.GotoBottom()
+			}
 			cmds = append(cmds, listenToVoiceEngine(m.voiceEngine))
 		}
 
@@ -1185,6 +1208,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textInput.SetValue(msg.Input)
 		m.textInput.SetCursor(len(m.textInput.Value()))
 	}
+
+	m.viewport, cmd = m.viewport.Update(msg)
+	cmds = append(cmds, cmd)
 
 	m.textInput, cmd = m.textInput.Update(msg)
 	cmds = append(cmds, cmd)
